@@ -1,61 +1,8 @@
 import random
 import streamlit as st
+#FIX: Refactored logic into logic_utils.py using agent mode (update_score now imported, duplicate removed)
+from logic_utils import check_guess, parse_guess, get_range_for_difficulty, update_score
 
-def get_range_for_difficulty(difficulty: str):
-    if difficulty == "Easy":
-        return 1, 20
-    if difficulty == "Normal":
-        return 1, 100
-    if difficulty == "Hard":
-        return 1, 50
-    return 1, 100
-
-
-def parse_guess(raw: str):
-    # FIX ME: potential bug here
-    if raw is None:
-        return False, None, "Enter a guess."
-
-    if raw == "":
-        return False, None, "Enter a guess."
-
-    try:
-        if "." in raw:
-            value = int(float(raw))
-        else:
-            value = int(raw)
-    except Exception:
-        return False, None, "That is not a number."
-
-    return True, value, None
-
-
-def check_guess(guess, secret):
-    if guess == secret:
-        return "Win", "🎉 Correct!"
-
-    if guess > secret:
-        return "Too High", "📉 Go LOWER!"
-    return "Too Low", "📈 Go HIGHER!"
-
-
-def update_score(current_score: int, outcome: str, attempt_number: int):
-    if outcome == "Win":
-        points = 100 - 10 * (attempt_number + 1)
-        if points < 10:
-            points = 10
-        return current_score + points
-
-    if outcome == "Too High":
-        #fixme: sus code
-        if attempt_number % 2 == 0:
-            return current_score + 5
-        return current_score - 5
-
-    if outcome == "Too Low":
-        return current_score - 5
-
-    return current_score
 
 st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
@@ -77,25 +24,27 @@ attempt_limit_map = {
 }
 attempt_limit = attempt_limit_map[difficulty]
 
+#FIX: Refactored logic into logic_utils.py using agent mode
 low, high = get_range_for_difficulty(difficulty)
 
 st.sidebar.caption(f"Range: {low} to {high}")
 st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
 
-if "secret" not in st.session_state:
+def reset_game():
     st.session_state.secret = random.randint(low, high)
-
-if "attempts" not in st.session_state:
     st.session_state.attempts = 0
-
-if "score" not in st.session_state:
     st.session_state.score = 0
-
-if "status" not in st.session_state:
     st.session_state.status = "playing"
-
-if "history" not in st.session_state:
     st.session_state.history = []
+    st.session_state.last_hint = None
+    # New widget key => the guess box is emptied for the new game
+    st.session_state.input_nonce = st.session_state.get("input_nonce", 0) + 1
+
+
+#FIX: game now resets when difficulty changes (secret used to stay from the old range)
+if st.session_state.get("difficulty") != difficulty:
+    st.session_state.difficulty = difficulty
+    reset_game()
 
 st.subheader("Make a guess")
 
@@ -105,7 +54,7 @@ debug_box = st.expander("Developer Debug Info")
 
 def render_status():
     info_box.info(
-        f"Guess a number between 1 and 100. "
+        f"Guess a number between {low} and {high}. "
         f"Attempts left: {attempt_limit - st.session_state.attempts}"
     )
     with debug_box:
@@ -118,7 +67,7 @@ def render_status():
 
 raw_guess = st.text_input(
     "Enter your guess:",
-    key=f"guess_input_{difficulty}"
+    key=f"guess_input_{difficulty}_{st.session_state.input_nonce}"
 )
 
 col1, col2, col3 = st.columns(3)
@@ -129,38 +78,35 @@ with col2:
 with col3:
     show_hint = st.checkbox("Show hint", value=True)
 
+#FIX: New Game now resets attempts, secret, status, score and history (agent mode)
 if new_game:
-    st.session_state.attempts = 0
-    st.session_state.secret = random.randint(low, high)
-    st.session_state.status = "playing"
-    st.session_state.score = 0
-    st.session_state.history = []
+    reset_game()
     st.rerun()
 
-render_status()
-
+#FIX: render_status() now runs once per rerun (at the bottom, after submit updates state) instead of
+# twice; the early call showed stale attempts in the debug expander, which appends rather than replaces.
 if st.session_state.status != "playing":
+    render_status()  # st.stop() below skips the bottom call
     if st.session_state.status == "won":
         st.success("You already won. Start a new game to play again.")
     else:
         st.error("Game over. Start a new game to try again.")
     st.stop()
 
+#FIX: Attempts counted once per submit and hints/scoring delegated to logic_utils.py using agent mode
 if submit:
-    st.session_state.attempts += 1
-
-    ok, guess_int, err = parse_guess(raw_guess)
+    #FIX: invalid or out-of-range input no longer costs an attempt or enters history
+    ok, guess_int, err = parse_guess(raw_guess, low, high)
 
     if not ok:
-        st.session_state.history.append(raw_guess)
         st.error(err)
     else:
+        st.session_state.attempts += 1
         st.session_state.history.append(guess_int)
 
         outcome, message = check_guess(guess_int, st.session_state.secret)
 
-        if show_hint:
-            st.warning(message)
+        st.session_state.last_hint = message
 
         st.session_state.score = update_score(
             current_score=st.session_state.score,
@@ -183,6 +129,10 @@ if submit:
                     f"The secret was {st.session_state.secret}. "
                     f"Score: {st.session_state.score}"
                 )
+
+#FIX: hint is kept in session state so toggling "Show hint" (a rerun without submit) doesn't erase it
+if show_hint and st.session_state.last_hint:
+    st.warning(st.session_state.last_hint)
 
 render_status()
 
