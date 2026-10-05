@@ -13,7 +13,6 @@ Some of the initial bugs I encountered included incorrect hints, incorrect attem
 
 These bugs made the game unreliable because I couldn't trust the hints, track my remaining attempts accurately, or consistently start a new game.
 - List at least two concrete bugs you noticed at the start  
-  (for example: "the hints were backwards").
 
 **Bug Reproduction Log**
 
@@ -102,7 +101,7 @@ Documenting bugs with their expected and actual behavior before attempting to fi
 
 - What is one thing you would do differently next time you work with AI on a coding task?
 Next time, I would commit to git more consistently so that I would have an easier time reverting to previous versions.
-I would prompt claude to commit after each fix/edit it makes
+also I would prompt claude to commit after each fix/edit it makes
 
 - In one or two sentences, describe how this project changed the way you think about AI generated code.
 AI-generated code isn't necessarily correct simply because it runs or appears functional. AI can be a useful debugging tool, but understanding the underlying code and independently verifying its suggestions are essential to producing reliable software.
